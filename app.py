@@ -1,6 +1,7 @@
 import streamlit as st
 
-st.write("APP INICIOU")
+st.title("Teste")
+st.success("App iniciou")
 
 # from services.ativos_service import (
 #     carregar_ativos,
