@@ -3,10 +3,8 @@ from db.queries import query_df, execute
 from db.connection import get_connection
 from config import TABELA, COLUNAS
 
-
 def carregar_ativos():
     return query_df(f"SELECT * FROM {TABELA}")
-
 
 def patrimonio_existe(patrimonio):
     df = query_df(
@@ -14,7 +12,6 @@ def patrimonio_existe(patrimonio):
         {"p": patrimonio},
     )
     return int(df["n"].iloc[0]) > 0
-
 
 def substituir_todos(df: pd.DataFrame):
     """
@@ -34,3 +31,42 @@ def substituir_todos(df: pd.DataFrame):
                 """,
                 registros,
             )
+
+def inserir_ativo(patrimonio, modelo, departamento, responsavel, serial_number):
+    execute(
+        f"""
+        INSERT INTO {TABELA}
+        (patrimonio, modelo, departamento, responsavel, serial_number)
+        VALUES (:pat, :mod, :dep, :resp, :serial)
+        """,
+        {
+            "pat": patrimonio,
+            "mod": modelo,
+            "dep": departamento,
+            "resp": responsavel,
+            "serial": serial_number,
+        },
+    )
+
+def atualizar_ativo(patrimonio, modelo, departamento, responsavel):
+    execute(
+        f"""
+        UPDATE {TABELA}
+        SET responsavel  = :resp,
+            departamento = :dep,
+            modelo       = :mod
+        WHERE patrimonio = :pat
+        """,
+        {
+            "resp": responsavel,
+            "dep": departamento,
+            "mod": modelo,
+            "pat": patrimonio,
+        },
+    )
+
+def excluir_ativo(patrimonio):
+    execute(
+        f"DELETE FROM {TABELA} WHERE patrimonio = :pat",
+        {"pat": patrimonio},
+    )
