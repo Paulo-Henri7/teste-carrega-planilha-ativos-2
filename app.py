@@ -59,13 +59,13 @@ if pagina == "Upload":
                     backup_gerado = gerar_backup_se_necessario("UPLOAD_PLANILHA")
                     limpar_cache()
 
-                msg = f"✅ Upload realizado! {len(df)} registros salvos."
+                msg = f"Upload realizado! {len(df)} registros salvos."
                 if backup_gerado:
-                    msg += " 💾 Backup gerado automaticamente."
+                    msg += "Backup gerado automaticamente."
                 st.success(msg)
 
             except Exception as e:
-                st.error(f"❌ Erro ao salvar no Databricks: {e}")
+                st.error(f"Erro ao salvar no Databricks: {e}")
 
 
 # ======================
@@ -113,7 +113,7 @@ elif pagina == "Ativos":
         st.caption(f"{len(df_filtrado)} ativos encontrados.")
 
     except Exception as e:
-        st.error(f"❌ Erro ao carregar ativos: {e}")
+        st.error(f"Erro ao carregar ativos: {e}")
 
 
 # ======================
@@ -157,9 +157,9 @@ elif pagina == "Manutenção":
             registrar_evento(obter_usuario(), "EDICAO", patrimonio, detalhes)
             backup_gerado = gerar_backup_se_necessario("EDICAO")
             limpar_cache()
-            msg = "✅ Alterações salvas com sucesso!"
+            msg = "Alterações salvas com sucesso!"
             if backup_gerado:
-                msg += " 💾 Backup gerado automaticamente."
+                msg += "Backup gerado automaticamente."
             st.success(msg)
             st.rerun()
 
@@ -176,14 +176,14 @@ elif pagina == "Manutenção":
             )
             backup_gerado = gerar_backup_se_necessario("EXCLUSAO")
             limpar_cache()
-            msg = "✅ Ativo removido com sucesso!"
+            msg = "Ativo removido com sucesso!"
             if backup_gerado:
-                msg += " 💾 Backup gerado automaticamente."
+                msg += "Backup gerado automaticamente."
             st.success(msg)
             st.rerun()
 
     except Exception as e:
-        st.error(f"❌ Erro: {e}")
+        st.error(f"Erro: {e}")
 
 
 # ======================
@@ -194,7 +194,7 @@ elif pagina == "Novo Ativo":
     st.subheader("Cadastro de Novo Ativo")
 
     if st.session_state.get("cadastro_ok"):
-        st.success("✅ Ativo cadastrado com sucesso!")
+        st.success("Ativo cadastrado com sucesso!")
         del st.session_state["cadastro_ok"]
 
     try:
@@ -214,7 +214,7 @@ elif pagina == "Novo Ativo":
             if not all([novo_patrimonio, novo_modelo, novo_departamento, novo_responsavel]):
                 st.warning("Preencha todos os campos obrigatórios.")
             elif patrimonio_existe(novo_patrimonio):
-                st.error("❌ Já existe um ativo com este patrimônio.")
+                st.error("Já existe um ativo com este patrimônio.")
             else:
                 inserir_ativo(novo_patrimonio, novo_modelo, novo_departamento, novo_responsavel, novo_serial)
                 registrar_evento(
@@ -229,7 +229,7 @@ elif pagina == "Novo Ativo":
                 st.rerun()
 
     except Exception as e:
-        st.error(f"❌ Erro: {e}")
+        st.error(f"Erro: {e}")
 
 
 # ======================
@@ -237,7 +237,7 @@ elif pagina == "Novo Ativo":
 # ======================
 elif pagina == "Histórico":
 
-    st.subheader("📜 Histórico")
+    st.subheader("Histórico")
 
     aba_auditoria, aba_backups = st.tabs(["Auditoria", "Backups"])
 
@@ -277,7 +277,7 @@ elif pagina == "Histórico":
                 st.caption(f"{len(df_filtrado)} eventos encontrados.")
 
         except Exception as e:
-            st.error(f"❌ Erro ao carregar auditoria: {e}")
+            st.error(f"Erro ao carregar auditoria: {e}")
 
     # ---------- ABA BACKUPS ----------
     with aba_backups:
@@ -373,15 +373,15 @@ elif pagina == "Histórico":
                             )
                             limpar_cache()
                             st.success(
-                                f"✅ Modificação #{mod_selecionada} restaurada com sucesso! "
+                                f"Modificação #{mod_selecionada} restaurada com sucesso! "
                                 f"{len(df_preview)} registros reinseridos."
                             )
 
                     except Exception as e:
-                        st.error(f"❌ Erro ao restaurar: {e}")
+                        st.error(f"Erro ao restaurar: {e}")
 
         except Exception as e:
-            st.error(f"❌ Erro ao carregar backups: {e}")
+            st.error(f"Erro ao carregar backups: {e}")
 
 
 # ======================
@@ -398,9 +398,9 @@ elif pagina == "Diagnóstico":
     try:
         from db.connection import get_connection
         with get_connection() as conn:
-            st.success("✅ Conexão estabelecida com sucesso.")
+            st.success("Conexão estabelecida com sucesso.")
     except Exception as e:
-        st.error(f"❌ Falha na conexão: {e}")
+        st.error(f"Falha na conexão: {e}")
         st.stop()
 
     st.markdown("#### 2. Leitura das tabelas")
@@ -409,9 +409,9 @@ elif pagina == "Diagnóstico":
     for nome, tabela in [("Ativos", TABELA), ("Auditoria", TABELA_AUDITORIA), ("Backup", TABELA_BACKUP)]:
         try:
             df = query_df(f"SELECT * FROM {tabela} LIMIT 1")
-            st.success(f"✅ {nome} (`{tabela}`): leitura OK — {len(df)} linha(s) retornada(s).")
+            st.success(f"{nome} (`{tabela}`): leitura OK — {len(df)} linha(s) retornada(s).")
         except Exception as e:
-            st.error(f"❌ {nome} (`{tabela}`): {e}")
+            st.error(f"{nome} (`{tabela}`): {e}")
 
     st.markdown("#### 3. Colunas da tabela de auditoria")
     try:
@@ -422,9 +422,9 @@ elif pagina == "Diagnóstico":
         if faltando:
             st.warning(f"⚠️ Colunas ausentes na auditoria: {faltando}")
         else:
-            st.success("✅ Todas as colunas esperadas estão presentes.")
+            st.success("Todas as colunas esperadas estão presentes.")
     except Exception as e:
-        st.error(f"❌ Erro ao inspecionar auditoria: {e}")
+        st.error(f"Erro ao inspecionar auditoria: {e}")
 
     st.markdown("#### 4. Colunas da tabela de backup")
     try:
@@ -435,9 +435,9 @@ elif pagina == "Diagnóstico":
         if faltando_bkp:
             st.warning(f"⚠️ Colunas ausentes no backup: {faltando_bkp}")
         else:
-            st.success("✅ Todas as colunas esperadas estão presentes.")
+            st.success("Todas as colunas esperadas estão presentes.")
     except Exception as e:
-        st.error(f"❌ Erro ao inspecionar backup: {e}")
+        st.error(f"Erro ao inspecionar backup: {e}")
 
     st.markdown("#### 5. Teste de escrita na auditoria")
     if st.button("Executar INSERT de teste na auditoria"):
@@ -456,6 +456,6 @@ elif pagina == "Diagnóstico":
                     "detalhes": "Teste de escrita via página de diagnóstico",
                 },
             )
-            st.success("✅ INSERT na auditoria executado com sucesso!")
+            st.success("INSERT na auditoria executado com sucesso!")
         except Exception as e:
-            st.error(f"❌ Falha no INSERT da auditoria: {e}")
+            st.error(f"Falha no INSERT da auditoria: {e}")
