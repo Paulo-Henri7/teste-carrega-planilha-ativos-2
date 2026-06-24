@@ -312,8 +312,34 @@ elif pagina == "Histórico":
                     "O estado atual será perdido (mas continuará recuperável pelo histórico Delta)."
                 )
 
-                opcoes_snapshot = df_bkp["backup_em"].astype(str).tolist()
-                snapshot_selecionado = st.selectbox("Selecione o snapshot", opcoes_snapshot)
+                # Seleção pelo número da modificação
+                opcoes_mod = sorted(df_bkp["modificacao_numero"].tolist(), reverse=True)
+                mod_selecionada = st.selectbox(
+                    "Selecione o número da modificação",
+                    opcoes_mod,
+                    format_func=lambda n: (
+                        f"Modificação #{n}  —  "
+                        + str(df_bkp.loc[df_bkp["modificacao_numero"] == n, "backup_em"].iloc[0])
+                    ),
+                )
+
+                # Preview do snapshot selecionado
+                backup_em_selecionado = df_bkp.loc[
+                    df_bkp["modificacao_numero"] == mod_selecionada, "backup_em"
+                ].iloc[0]
+
+                with st.spinner("Carregando preview..."):
+                    df_preview = query_df(
+                        f"""
+                        SELECT {', '.join(COLUNAS)}
+                        FROM {TABELA_BACKUP}
+                        WHERE modificacao_numero = :mod
+                        """,
+                        {"mod": int(mod_selecionada)},
+                    )
+
+                st.markdown(f"**Preview — Modificação #{mod_selecionada}** ({len(df_preview)} registros)")
+                st.dataframe(df_preview, use_container_width=True)
 
                 confirmar_restore = st.checkbox("Confirmo que desejo restaurar este snapshot")
 
@@ -322,22 +348,11 @@ elif pagina == "Histórico":
                         from services.audit_service import registrar_evento
                         from utils.auth import obter_usuario
 
-                        # Busca os registros do snapshot
-                        df_restore = query_df(
-                            f"""
-                            SELECT {', '.join(COLUNAS)}
-                            FROM {TABELA_BACKUP}
-                            WHERE CAST(backup_em AS STRING) = :snap
-                            """,
-                            {"snap": snapshot_selecionado},
-                        )
-
-                        if df_restore.empty:
+                        if df_preview.empty:
                             st.error("Nenhum registro encontrado neste snapshot.")
                         else:
-                            # Trunca e reinseere
                             execute(f"TRUNCATE TABLE {TABELA}")
-                            registros = df_restore[COLUNAS].astype(str).to_dict("records")
+                            registros = df_preview[COLUNAS].astype(str).to_dict("records")
 
                             with get_connection() as conn:
                                 with conn.cursor() as cursor:
@@ -354,10 +369,13 @@ elif pagina == "Histórico":
                                 obter_usuario(),
                                 "RESTAURACAO_BACKUP",
                                 "N/A",
-                                f"Snapshot restaurado: {snapshot_selecionado} ({len(df_restore)} registros)",
+                                f"Modificação #{mod_selecionada} de {backup_em_selecionado} restaurada ({len(df_preview)} registros)",
                             )
                             limpar_cache()
-                            st.success(f"✅ Snapshot de {snapshot_selecionado} restaurado com sucesso! {len(df_restore)} registros reinseridos.")
+                            st.success(
+                                f"✅ Modificação #{mod_selecionada} restaurada com sucesso! "
+                                f"{len(df_preview)} registros reinseridos."
+                            )
 
                     except Exception as e:
                         st.error(f"❌ Erro ao restaurar: {e}")
