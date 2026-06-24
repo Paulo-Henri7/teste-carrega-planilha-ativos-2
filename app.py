@@ -9,7 +9,7 @@ except Exception as e:
 st.set_page_config(page_title="Controle de Ativos", layout="wide")
 st.title("📋 Controle de Ativos")
 
-pagina = st.sidebar.selectbox("Menu", ["Upload", "Ativos", "Manutenção", "Novo Ativo"])
+pagina = st.sidebar.selectbox("Menu", ["Upload", "Ativos", "Manutenção", "Novo Ativo", "Diagnóstico"])
 
 
 # ======================
@@ -230,3 +230,87 @@ elif pagina == "Novo Ativo":
 
     except Exception as e:
         st.error(f"❌ Erro: {e}")
+
+
+# ======================
+# DIAGNÓSTICO
+# ======================
+elif pagina == "Diagnóstico":
+
+    st.subheader("🔍 Diagnóstico de Conexão e Tabelas")
+    st.caption("Use esta página para identificar problemas de conexão ou estrutura das tabelas.")
+
+    from config import TABELA, TABELA_AUDITORIA, TABELA_BACKUP
+
+    # --- Teste 1: Conexão ---
+    st.markdown("#### 1. Conexão com Databricks")
+    try:
+        from db.connection import get_connection
+        with get_connection() as conn:
+            st.success("✅ Conexão estabelecida com sucesso.")
+    except Exception as e:
+        st.error(f"❌ Falha na conexão: {e}")
+        st.stop()
+
+    # --- Teste 2: Leitura das tabelas ---
+    st.markdown("#### 2. Leitura das tabelas")
+    from db.queries import query_df
+
+    for nome, tabela in [("Ativos", TABELA), ("Auditoria", TABELA_AUDITORIA), ("Backup", TABELA_BACKUP)]:
+        try:
+            df = query_df(f"SELECT * FROM {tabela} LIMIT 1")
+            st.success(f"✅ {nome} (`{tabela}`): leitura OK — {len(df)} linha(s) retornada(s).")
+        except Exception as e:
+            st.error(f"❌ {nome} (`{tabela}`): {e}")
+
+    # --- Teste 3: Colunas da tabela de auditoria ---
+    st.markdown("#### 3. Colunas da tabela de auditoria")
+    try:
+        df_audit = query_df(f"SELECT * FROM {TABELA_AUDITORIA} LIMIT 0")
+        st.info(f"Colunas encontradas: `{list(df_audit.columns)}`")
+        esperadas = ["data_hora", "usuario", "acao", "patrimonio", "detalhes", "transaction_id"]
+        faltando = [c for c in esperadas if c not in df_audit.columns]
+        if faltando:
+            st.warning(f"⚠️ Colunas ausentes na auditoria: {faltando}")
+        else:
+            st.success("✅ Todas as colunas esperadas estão presentes.")
+    except Exception as e:
+        st.error(f"❌ Erro ao inspecionar auditoria: {e}")
+
+    # --- Teste 4: Colunas da tabela de backup ---
+    st.markdown("#### 4. Colunas da tabela de backup")
+    try:
+        df_bkp = query_df(f"SELECT * FROM {TABELA_BACKUP} LIMIT 0")
+        st.info(f"Colunas encontradas: `{list(df_bkp.columns)}`")
+        esperadas_bkp = ["patrimonio", "modelo", "departamento", "responsavel", "serial_number", "backup_em", "modificacao_numero"]
+        faltando_bkp = [c for c in esperadas_bkp if c not in df_bkp.columns]
+        if faltando_bkp:
+            st.warning(f"⚠️ Colunas ausentes no backup: {faltando_bkp}")
+        else:
+            st.success("✅ Todas as colunas esperadas estão presentes.")
+    except Exception as e:
+        st.error(f"❌ Erro ao inspecionar backup: {e}")
+
+    # --- Teste 5: INSERT de teste na auditoria ---
+    st.markdown("#### 5. Teste de escrita na auditoria")
+    if st.button("Executar INSERT de teste na auditoria"):
+        try:
+            from db.queries import execute
+            import uuid
+            execute(
+                f"""
+                INSERT INTO {TABELA_AUDITORIA}
+                (data_hora, usuario, acao, patrimonio, detalhes, transaction_id)
+                VALUES (current_timestamp(), :usuario, :acao, :patrimonio, :detalhes, :tx)
+                """,
+                {
+                    "usuario": "diagnostico",
+                    "acao": "TESTE",
+                    "patrimonio": "N/A",
+                    "detalhes": "Teste de escrita via página de diagnóstico",
+                    "tx": str(uuid.uuid4()),
+                },
+            )
+            st.success("✅ INSERT na auditoria executado com sucesso!")
+        except Exception as e:
+            st.error(f"❌ Falha no INSERT da auditoria: {e}")
