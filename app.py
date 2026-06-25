@@ -9,7 +9,17 @@ except Exception as e:
 st.set_page_config(page_title="Controle de Ativos", layout="wide")
 st.title("📋 Controle de Ativos")
 
-pagina = st.sidebar.selectbox("Menu", ["Upload", "Ativos", "Manutenção", "Novo Ativo", "Edição em Lote", "Relatório", "Histórico", "Diagnóstico"])
+from utils.auth import obter_usuario
+from utils.backup_auth import tem_acesso_backup
+
+_usuario_atual = obter_usuario()
+_is_admin = tem_acesso_backup(_usuario_atual)
+
+_menu = ["Upload", "Ativos", "Manutenção", "Novo Ativo", "Edição em Lote", "Relatório", "Histórico"]
+if _is_admin:
+    _menu.append("Diagnóstico")
+
+pagina = st.sidebar.selectbox("Menu", _menu)
 
 
 # ======================
