@@ -259,10 +259,6 @@ elif pagina == "Edição em Lote":
             st.warning("Nenhum ativo cadastrado.")
             st.stop()
 
-        # Listas para os dropdowns (valores existentes no banco)
-        deps_disponiveis  = ["— sem alteração —"] + sorted(df["departamento"].dropna().astype(str).unique().tolist())
-        resps_disponiveis = ["— sem alteração —"] + sorted(df["responsavel"].dropna().astype(str).unique().tolist())
-
         # Filtro opcional para facilitar seleção
         with st.expander("Filtrar lista por departamento ou responsável"):
             col1, col2 = st.columns(2)
@@ -292,8 +288,8 @@ elif pagina == "Edição em Lote":
             )
 
             st.divider()
-            st.markdown("**Edição individual** — selecione os novos valores em cada card")
-            st.caption("Campos mantidos em '— sem alteração —' preservam o valor atual do patrimônio.")
+            st.markdown("**Edição individual** — preencha os campos que deseja alterar em cada card")
+            st.caption("Campos deixados em branco preservam o valor atual do patrimônio. Novos responsáveis e departamentos podem ser digitados livremente.")
 
             # Um card por patrimônio selecionado
             novos_valores = {}
@@ -305,25 +301,25 @@ elif pagina == "Edição em Lote":
 
                     col1, col2 = st.columns(2)
                     with col1:
-                        novo_resp = st.selectbox(
+                        novo_resp = st.text_input(
                             "Novo Responsável",
-                            resps_disponiveis,
+                            placeholder="Deixe em branco para não alterar",
                             key=f"resp_{pat}",
                         )
-                        if novo_resp == "— sem alteração —":
+                        if not novo_resp:
                             st.caption("Caso valor não seja alterado, permanecerá o mesmo")
                     with col2:
-                        novo_dep = st.selectbox(
+                        novo_dep = st.text_input(
                             "Novo Departamento",
-                            deps_disponiveis,
+                            placeholder="Deixe em branco para não alterar",
                             key=f"dep_{pat}",
                         )
-                        if novo_dep == "— sem alteração —":
+                        if not novo_dep:
                             st.caption("Caso valor não seja alterado, permanecerá o mesmo")
 
                     novos_valores[pat] = {
-                        "resp": novo_resp if novo_resp != "— sem alteração —" else None,
-                        "dep":  novo_dep  if novo_dep  != "— sem alteração —" else None,
+                        "resp": novo_resp.strip() if novo_resp.strip() else None,
+                        "dep":  novo_dep.strip()  if novo_dep.strip()  else None,
                     }
 
             st.divider()
