@@ -484,7 +484,16 @@ elif pagina == "Histórico":
 
     st.subheader("Histórico")
 
-    aba_auditoria, aba_backups = st.tabs(["Auditoria", "Backups"])
+    from utils.auth import obter_usuario
+    from utils.backup_auth import tem_acesso_backup
+
+    _usuario_historico = obter_usuario()
+    _pode_ver_backup = tem_acesso_backup(_usuario_historico)
+
+    _abas = ["Auditoria", "Backups"] if _pode_ver_backup else ["Auditoria"]
+    _tabs = st.tabs(_abas)
+    aba_auditoria = _tabs[0]
+    aba_backups   = _tabs[1] if _pode_ver_backup else None
 
     # ---------- ABA AUDITORIA ----------
     with aba_auditoria:
@@ -525,108 +534,109 @@ elif pagina == "Histórico":
             st.error(f"Erro ao carregar auditoria: {e}")
 
     # ---------- ABA BACKUPS ----------
-    with aba_backups:
+    if aba_backups:
+        with aba_backups:
 
-        st.markdown("#### Snapshots Disponíveis")
+            st.markdown("#### Snapshots Disponíveis")
 
-        try:
-            from db.queries import query_df, execute
-            from db.connection import get_connection
-            from config import TABELA_BACKUP, TABELA, COLUNAS
-            from utils.cache import limpar_cache
+            try:
+                from db.queries import query_df, execute
+                from db.connection import get_connection
+                from config import TABELA_BACKUP, TABELA, COLUNAS
+                from utils.cache import limpar_cache
 
-            with st.spinner("Carregando backups..."):
-                df_bkp = query_df(
-                    f"""
-                    SELECT DISTINCT backup_em, modificacao_numero
-                    FROM {TABELA_BACKUP}
-                    ORDER BY backup_em DESC
-                    """
-                )
-
-            if df_bkp.empty:
-                st.info("Nenhum backup gerado ainda. Os backups são criados automaticamente a cada 10 modificações.")
-            else:
-                st.dataframe(df_bkp, use_container_width=True)
-                st.caption(f"{len(df_bkp)} snapshot(s) disponível(is).")
-
-                st.divider()
-                st.markdown("#### Restaurar Snapshot")
-                st.warning(
-                    "⚠️ A restauração SUBSTITUI todos os ativos atuais pelo snapshot selecionado. "
-                    "O estado atual será perdido (mas continuará recuperável pelo histórico Delta)."
-                )
-
-                # Seleção pelo número da modificação
-                opcoes_mod = sorted(df_bkp["modificacao_numero"].tolist(), reverse=True)
-                mod_selecionada = st.selectbox(
-                    "Selecione o número da modificação",
-                    opcoes_mod,
-                    format_func=lambda n: (
-                        f"Modificação #{n}  —  "
-                        + str(df_bkp.loc[df_bkp["modificacao_numero"] == n, "backup_em"].iloc[0])
-                    ),
-                )
-
-                # Preview do snapshot selecionado
-                backup_em_selecionado = df_bkp.loc[
-                    df_bkp["modificacao_numero"] == mod_selecionada, "backup_em"
-                ].iloc[0]
-
-                with st.spinner("Carregando preview..."):
-                    df_preview = query_df(
+                with st.spinner("Carregando backups..."):
+                    df_bkp = query_df(
                         f"""
-                        SELECT {', '.join(COLUNAS)}
+                        SELECT DISTINCT backup_em, modificacao_numero
                         FROM {TABELA_BACKUP}
-                        WHERE modificacao_numero = :mod
-                        """,
-                        {"mod": int(mod_selecionada)},
+                        ORDER BY backup_em DESC
+                        """
                     )
 
-                st.markdown(f"**Preview — Modificação #{mod_selecionada}** ({len(df_preview)} registros)")
-                st.dataframe(df_preview, use_container_width=True)
+                if df_bkp.empty:
+                    st.info("Nenhum backup gerado ainda. Os backups são criados automaticamente a cada 10 modificações.")
+                else:
+                    st.dataframe(df_bkp, use_container_width=True)
+                    st.caption(f"{len(df_bkp)} snapshot(s) disponível(is).")
 
-                confirmar_restore = st.checkbox("Confirmo que desejo restaurar este snapshot")
+                    st.divider()
+                    st.markdown("#### Restaurar Snapshot")
+                    st.warning(
+                        "⚠️ A restauração SUBSTITUI todos os ativos atuais pelo snapshot selecionado. "
+                        "O estado atual será perdido (mas continuará recuperável pelo histórico Delta)."
+                    )
 
-                if confirmar_restore and st.button("Restaurar", type="primary"):
-                    try:
-                        from services.audit_service import registrar_evento
-                        from utils.auth import obter_usuario
+                    # Seleção pelo número da modificação
+                    opcoes_mod = sorted(df_bkp["modificacao_numero"].tolist(), reverse=True)
+                    mod_selecionada = st.selectbox(
+                        "Selecione o número da modificação",
+                        opcoes_mod,
+                        format_func=lambda n: (
+                            f"Modificação #{n}  —  "
+                            + str(df_bkp.loc[df_bkp["modificacao_numero"] == n, "backup_em"].iloc[0])
+                        ),
+                    )
 
-                        if df_preview.empty:
-                            st.error("Nenhum registro encontrado neste snapshot.")
-                        else:
-                            execute(f"TRUNCATE TABLE {TABELA}")
-                            registros = df_preview[COLUNAS].astype(str).to_dict("records")
+                    # Preview do snapshot selecionado
+                    backup_em_selecionado = df_bkp.loc[
+                        df_bkp["modificacao_numero"] == mod_selecionada, "backup_em"
+                    ].iloc[0]
 
-                            with get_connection() as conn:
-                                with conn.cursor() as cursor:
-                                    cursor.executemany(
-                                        f"""
-                                        INSERT INTO {TABELA}
-                                        (patrimonio, modelo, departamento, responsavel, serial_number)
-                                        VALUES (:patrimonio, :modelo, :departamento, :responsavel, :serial_number)
-                                        """,
-                                        registros,
-                                    )
+                    with st.spinner("Carregando preview..."):
+                        df_preview = query_df(
+                            f"""
+                            SELECT {', '.join(COLUNAS)}
+                            FROM {TABELA_BACKUP}
+                            WHERE modificacao_numero = :mod
+                            """,
+                            {"mod": int(mod_selecionada)},
+                        )
 
-                            registrar_evento(
-                                obter_usuario(),
-                                "RESTAURACAO_BACKUP",
-                                "N/A",
-                                f"Modificação #{mod_selecionada} de {backup_em_selecionado} restaurada ({len(df_preview)} registros)",
-                            )
-                            limpar_cache()
-                            st.success(
-                                f"Modificação #{mod_selecionada} restaurada com sucesso! "
-                                f"{len(df_preview)} registros reinseridos."
-                            )
+                    st.markdown(f"**Preview — Modificação #{mod_selecionada}** ({len(df_preview)} registros)")
+                    st.dataframe(df_preview, use_container_width=True)
 
-                    except Exception as e:
-                        st.error(f"Erro ao restaurar: {e}")
+                    confirmar_restore = st.checkbox("Confirmo que desejo restaurar este snapshot")
 
-        except Exception as e:
-            st.error(f"Erro ao carregar backups: {e}")
+                    if confirmar_restore and st.button("Restaurar", type="primary"):
+                        try:
+                            from services.audit_service import registrar_evento
+                            from utils.auth import obter_usuario
+
+                            if df_preview.empty:
+                                st.error("Nenhum registro encontrado neste snapshot.")
+                            else:
+                                execute(f"TRUNCATE TABLE {TABELA}")
+                                registros = df_preview[COLUNAS].astype(str).to_dict("records")
+
+                                with get_connection() as conn:
+                                    with conn.cursor() as cursor:
+                                        cursor.executemany(
+                                            f"""
+                                            INSERT INTO {TABELA}
+                                            (patrimonio, modelo, departamento, responsavel, serial_number)
+                                            VALUES (:patrimonio, :modelo, :departamento, :responsavel, :serial_number)
+                                            """,
+                                            registros,
+                                        )
+
+                                registrar_evento(
+                                    obter_usuario(),
+                                    "RESTAURACAO_BACKUP",
+                                    "N/A",
+                                    f"Modificação #{mod_selecionada} de {backup_em_selecionado} restaurada ({len(df_preview)} registros)",
+                                )
+                                limpar_cache()
+                                st.success(
+                                    f"Modificação #{mod_selecionada} restaurada com sucesso! "
+                                    f"{len(df_preview)} registros reinseridos."
+                                )
+
+                        except Exception as e:
+                            st.error(f"Erro ao restaurar: {e}")
+
+            except Exception as e:
+                st.error(f"Erro ao carregar backups: {e}")
 
 
 # ======================
