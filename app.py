@@ -244,7 +244,7 @@ elif pagina == "Novo Ativo":
 elif pagina == "Edição em Lote":
 
     st.subheader("✏️ Edição em Lote")
-    st.caption("Selecione os patrimônios e altere responsável e/ou departamento de uma vez.")
+    st.caption("Selecione os patrimônios e edite responsável e/ou departamento individualmente em cada card.")
 
     try:
         from services.ativos_service import carregar_ativos, atualizar_ativo
@@ -259,15 +259,19 @@ elif pagina == "Edição em Lote":
             st.warning("Nenhum ativo cadastrado.")
             st.stop()
 
+        # Listas para os dropdowns (valores existentes no banco)
+        deps_disponiveis  = ["— sem alteração —"] + sorted(df["departamento"].dropna().astype(str).unique().tolist())
+        resps_disponiveis = ["— sem alteração —"] + sorted(df["responsavel"].dropna().astype(str).unique().tolist())
+
         # Filtro opcional para facilitar seleção
         with st.expander("Filtrar lista por departamento ou responsável"):
             col1, col2 = st.columns(2)
             with col1:
-                deps = ["Todos"] + sorted(df["departamento"].dropna().astype(str).unique().tolist())
-                filtro_dep = st.selectbox("Departamento", deps, key="lote_dep")
+                deps_filtro = ["Todos"] + sorted(df["departamento"].dropna().astype(str).unique().tolist())
+                filtro_dep = st.selectbox("Departamento", deps_filtro, key="lote_dep")
             with col2:
-                resps = ["Todos"] + sorted(df["responsavel"].dropna().astype(str).unique().tolist())
-                filtro_resp = st.selectbox("Responsável", resps, key="lote_resp")
+                resps_filtro = ["Todos"] + sorted(df["responsavel"].dropna().astype(str).unique().tolist())
+                filtro_resp = st.selectbox("Responsável", resps_filtro, key="lote_resp")
 
         df_filtrado = df.copy()
         if filtro_dep != "Todos":
@@ -288,50 +292,98 @@ elif pagina == "Edição em Lote":
             )
 
             st.divider()
-            st.markdown("**Novos valores** — deixe em branco para não alterar o campo")
+            st.markdown("**Edição individual** — selecione os novos valores em cada card")
+            st.caption("Campos mantidos em '— sem alteração —' preservam o valor atual do patrimônio.")
 
-            col1, col2 = st.columns(2)
-            with col1:
-                novo_responsavel = st.text_input("Novo Responsável")
-            with col2:
-                novo_departamento = st.text_input("Novo Departamento")
+            # Um card por patrimônio selecionado
+            novos_valores = {}
+            for pat in patrimonios_selecionados:
+                ativo = df[df["patrimonio"].astype(str) == pat].iloc[0]
 
-            if not novo_responsavel and not novo_departamento:
-                st.info("Preencha ao menos um dos campos acima.")
-            elif st.button("Aplicar em Lote", type="primary"):
-                erros = []
-                for pat in patrimonios_selecionados:
-                    try:
-                        ativo = df[df["patrimonio"].astype(str) == pat].iloc[0]
-                        resp_final = novo_responsavel if novo_responsavel else str(ativo["responsavel"])
-                        dep_final = novo_departamento if novo_departamento else str(ativo["departamento"])
-                        mod_final = str(ativo["modelo"])
+                with st.container(border=True):
+                    st.markdown(f"**{pat}** — modelo: `{ativo['modelo']}` · resp. atual: `{ativo['responsavel']}` · dep. atual: `{ativo['departamento']}`")
 
-                        atualizar_ativo(pat, mod_final, dep_final, resp_final)
-
-                        detalhes = []
-                        if novo_responsavel:
-                            detalhes.append(f"Responsavel: {ativo['responsavel']} --> {resp_final}")
-                        if novo_departamento:
-                            detalhes.append(f"Departamento: {ativo['departamento']} --> {dep_final}")
-
-                        registrar_evento(
-                            obter_usuario(),
-                            "EDICAO_LOTE",
-                            pat,
-                            " | ".join(detalhes),
+                    col1, col2 = st.columns(2)
+                    with col1:
+                        novo_resp = st.selectbox(
+                            "Novo Responsável",
+                            resps_disponiveis,
+                            key=f"resp_{pat}",
                         )
-                    except Exception as e:
-                        erros.append(f"{pat}: {e}")
+                        if novo_resp == "— sem alteração —":
+                            st.caption("Caso valor não seja alterado, permanecerá o mesmo")
+                    with col2:
+                        novo_dep = st.selectbox(
+                            "Novo Departamento",
+                            deps_disponiveis,
+                            key=f"dep_{pat}",
+                        )
+                        if novo_dep == "— sem alteração —":
+                            st.caption("Caso valor não seja alterado, permanecerá o mesmo")
 
-                gerar_backup_se_necessario("EDICAO")
-                limpar_cache()
+                    novos_valores[pat] = {
+                        "resp": novo_resp if novo_resp != "— sem alteração —" else None,
+                        "dep":  novo_dep  if novo_dep  != "— sem alteração —" else None,
+                    }
 
-                if erros:
-                    st.warning(f"Concluído com erros: {erros}")
-                else:
-                    st.success(f"✅ {len(patrimonios_selecionados)} ativos atualizados com sucesso!")
-                st.rerun()
+            st.divider()
+
+            # Verifica se ao menos um campo foi alterado em algum card
+            tem_alteracao = any(
+                v["resp"] or v["dep"] for v in novos_valores.values()
+            )
+
+            if not tem_alteracao:
+                st.info("Selecione ao menos um novo valor em algum dos cards para habilitar o salvamento.")
+            else:
+                # Resumo do que será salvo
+                alteracoes_resumo = [
+                    pat for pat, v in novos_valores.items() if v["resp"] or v["dep"]
+                ]
+                st.success(f"{len(alteracoes_resumo)} patrimônio(s) com alterações pendentes: {', '.join(alteracoes_resumo)}")
+
+                if st.button(f"Salvar alterações ({len(alteracoes_resumo)} patrimônios)", type="primary"):
+                    erros = []
+                    salvos = 0
+
+                    for pat, vals in novos_valores.items():
+                        # Patrimônios sem nenhum campo alterado são ignorados
+                        if not vals["resp"] and not vals["dep"]:
+                            continue
+
+                        try:
+                            ativo = df[df["patrimonio"].astype(str) == pat].iloc[0]
+                            resp_final = vals["resp"] if vals["resp"] else str(ativo["responsavel"])
+                            dep_final  = vals["dep"]  if vals["dep"]  else str(ativo["departamento"])
+                            mod_final  = str(ativo["modelo"])
+
+                            atualizar_ativo(pat, mod_final, dep_final, resp_final)
+
+                            detalhes = []
+                            if vals["resp"]:
+                                detalhes.append(f"Responsavel: {ativo['responsavel']} --> {resp_final}")
+                            if vals["dep"]:
+                                detalhes.append(f"Departamento: {ativo['departamento']} --> {dep_final}")
+
+                            registrar_evento(
+                                obter_usuario(),
+                                "EDICAO_LOTE",
+                                pat,
+                                " | ".join(detalhes),
+                            )
+                            salvos += 1
+
+                        except Exception as e:
+                            erros.append(f"{pat}: {e}")
+
+                    gerar_backup_se_necessario("EDICAO")
+                    limpar_cache()
+
+                    if erros:
+                        st.warning(f"Concluído com erros em {len(erros)} patrimônio(s): {erros}")
+                    if salvos:
+                        st.success(f"✅ {salvos} patrimônio(s) atualizado(s) com sucesso!")
+                    st.rerun()
 
     except Exception as e:
         st.error(f"❌ Erro: {e}")
