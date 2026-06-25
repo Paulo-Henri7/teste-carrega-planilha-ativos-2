@@ -15,9 +15,9 @@ from utils.backup_auth import tem_acesso_backup
 _usuario_atual = obter_usuario()
 _is_admin = tem_acesso_backup(_usuario_atual)
 
-_menu = ["Upload", "Ativos", "Manutenção", "Novo Ativo", "Edição em Lote", "Relatório", "Histórico"]
+_menu = ["Ativos", "Manutenção", "Novo Ativo", "Edição em Lote", "Relatório", "Histórico"]
 if _is_admin:
-    _menu.append("Diagnóstico")
+    _menu = ["Upload"] + _menu + ["Diagnóstico"]
 
 pagina = st.sidebar.selectbox("Menu", _menu)
 
